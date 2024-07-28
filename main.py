@@ -14,6 +14,17 @@ import argparse
 import os
 import torchaudio
 import speechbrain as sb
+import tensorflow as tf
+import numpy as np
+import yaml
+import tensorflow as tf
+import pyttsx3
+import speech_recognition as sr
+
+import sys
+# sys.path.append('/content/TensorFlowTTS')
+
+
 # from speechbrain.pretrained import Tacotron2
 # from speechbrain.pretrained import HIFIGAN
 import nltk
@@ -64,6 +75,48 @@ def transcribe_audio(filename):
     transcription = processor.decode(predicted_ids[0].numpy())
     return transcription
 
+def speak_response_simple(response):
+    engine = pyttsx3.init()
+    #engine.save_to_file(response, 'gen_speech.mp3')
+    engine.say(response)
+    engine.runAndWait()
+
+def speak_response_gtts(response):
+    from gtts import gTTS
+
+
+    # Language in which you want to convert
+    language = 'en'
+
+    # Passing the text and language to the engine, 
+    # here we have marked slow=False. Which tells 
+    # the module that the converted audio should 
+    # have a high speed
+    myobj = gTTS(text=response, lang=language, slow=False)
+
+    # Saving the converted audio in a mp3 file named
+    # welcome 
+    myobj.save("response.mp3")
+
+    # Playing the converted file
+    os.system("mpg321 response.mp3 &")   
+    
+
+def get_voice_input(engine):
+    r = sr.Recognizer()
+    #mic = sr.Microphone()
+    mic = sr.Microphone(device_index=0)
+    print("\n***\nEnter your input now, via microphone.")
+    # engine.say("I'm listening. Please give your command.")
+    speak_response_gtts("I'm listening.")
+    engine.runAndWait()
+    with mic as source:
+        audio = r.listen(source)
+
+    # with open("microphone-results.wav", "wb") as f:
+    #   f.write(audio.get_wav_data())
+    return r.recognize_whisper(audio)
+
 
 def speak_response(response, filename):
     processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
@@ -93,7 +146,7 @@ def generate_response_online(prompt):
     # openai.base_url = 'http://localhost:11434/v1'
 
     client = OpenAI(
-        base_url="http://localhost:11434/v1",
+        base_url="http://192.168.50.235:1234/v1",
         api_key="llama3",
     )
     def get_response(prompt):
@@ -102,6 +155,10 @@ def generate_response_online(prompt):
                 model="tinyllama",
                 # prompt=prompt,
                 messages=[
+                    {
+                        'role': 'system',
+                        'content': 'You are a helpful AI assistant who answers questions very succinctly. You always respond very tersely and to the point. You will include NO FORMATTING in your response, and respond as if your reply will be spoken.'
+                    },
                     { 
                         'role': 'user',
                         'content': prompt
@@ -194,34 +251,32 @@ def main():
 
         print("offline mode enabled")
     else:
+        # download_models()
 
         print("online mode enabled")
-        data, samplerate = sf.read("boot.wav")
-        sd.play(data, samplerate)
-        sd.wait()
-        audio = record_audio()
-        save_audio_to_file("recorded_audio.wav", audio)
-    
-        thinking, samplerate = sf.read("thinking.wav")
-        sd.play(thinking, samplerate)
-        sd.wait()
-        #play_audio_from_file("recorded_audio.wav")a
-        #transcription = "What is the future of space travel?"
-        #transcription = "How can a ship fly using antigravity?"
-        transcription = transcribe_audio("recorded_audio.wav")
+        #data, samplerate = sf.read("boot.wav")
+        #sd.play(data, samplerate)
+        #sd.wait()
+        engine = pyttsx3.init()
+
+        transcription = get_voice_input(engine)
         print("Transcription:", transcription)
-        
-        sd.play(thinking, samplerate)
-        sd.wait()
-        response = generate_response_online(transcription)
-        print("Hank says:", response)
-        speak_response(response, "speech.wav")
 
-        respond, samplerate = sf.read("speech.wav")
-        sd.play(respond, samplerate)
-        sd.wait()
+        if True: # 'hank respond' in transcription.lower() or 'hank, respond' in transcription.lower():        
+            #sd.play(thinking, samplerate)
+            #sd.wait()
+            response = generate_response_online(transcription)
+            print("Hank says:", response)
+            speak_response_gtts(response)
+        else:
+            print("could not get command.")
 
-        print("Online mode enabled")
+        #respond, samplerate = sf.read("speech.wav")
+        #sd.play(respond, samplerate)
+        #sd.wait()
+
+        #print("Online mode enabled")
 
 if __name__ == "__main__":
+    ## while True:
     main()
